@@ -152,6 +152,28 @@
       :desc "Renomear simb. (LSP)" "c r" #'lsp-rename)
 
 
+;; ======================================================================
+;;                               VTERM
+;; ======================================================================
+
+(defun +my/vterm-project-root ()
+  "Abre vterm na raiz do projeto (se houver); senão, no dir atual."
+  (interactive)
+  (let* ((proj (when (fboundp 'projectile-project-root)
+                 (ignore-errors (projectile-project-root))))
+         (proj2 (when (and (not proj) (fboundp 'project-current))
+                  (when-let ((p (project-current))) (project-root p))))
+         (dir (or proj proj2 default-directory)))
+    (let ((default-directory dir))
+      (vterm))))
+
+(map! :leader "o t" #'+my/vterm-project-root)
+
+
+;; ======================================================================
+;;                               META REBIND
+;; ======================================================================
+
 ;; There are two ways to load a theme. Both assume the theme is installed and
 ;; available. You can either set `doom-theme' or manually load a theme with the
 ;; `load-theme' function. This is the default:
