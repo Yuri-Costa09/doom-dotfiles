@@ -1,33 +1,156 @@
 ;;; $DOOMDIR/config.el -*- lexical-binding: t; -*-
 
-;; Place your private configuration here! Remember, you do not need to run 'doom
-;; sync' after modifying this file!
-
 
 ;; Some functionality uses this to identify you, e.g. GPG configuration, email
 ;; clients, file templates and snippets. It is optional.
-;; (setq user-full-name "John Doe"
-;;       user-mail-address "john@doe.com")
+(setq user-full-name "Yuri"
+      user-mail-address "yurircostawork@gmail.com")
 
-;; Doom exposes five (optional) variables for controlling fonts in Doom:
-;;
-;; - `doom-font' -- the primary font to use
-;; - `doom-variable-pitch-font' -- a non-monospace font (where applicable)
-;; - `doom-big-font' -- used for `doom-big-font-mode'; use this for
-;;   presentations or streaming.
-;; - `doom-symbol-font' -- for symbols
-;; - `doom-serif-font' -- for the `fixed-pitch-serif' face
-;;
-;; See 'C-h v doom-font' for documentation and more examples of what they
-;; accept. For example:
-;;
-;;(setq doom-font (font-spec :family "Fira Code" :size 12 :weight 'semi-light)
-;;      doom-variable-pitch-font (font-spec :family "Fira Sans" :size 13))
-;;
-;; If you or Emacs can't find your font, use 'M-x describe-font' to look them
-;; up, `M-x eval-region' to execute elisp code, and 'M-x doom/reload-font' to
-;; refresh your font settings. If Emacs still can't find your font, it likely
-;; wasn't installed correctly. Font issues are rarely Doom issues!
+;; ---------- Comportamento geral ----------
+(setq +format-on-save-enabled-modes
+      '(not emacs-lisp-mode
+        org-mode
+        sql-mode))
+
+(setq +format-with-lsp t) ; onde LSP suportar format, use-o
+
+;; Melhorias de busca e projeto
+(setq projectile-project-search-path '("~/code" "~/work")
+      projectile-auto-discover t)
+
+;; Treemacs
+(after! treemacs
+  (setq treemacs-width 34
+        treemacs-indentation 2))
+
+;; ---------- LSP ----------
+(after! lsp-mode
+  (setq lsp-idle-delay 0.2
+        lsp-completion-provider :none          ; deixa a company gerir
+        lsp-enable-file-watchers t
+        lsp-file-watch-threshold 2000
+        lsp-log-io nil
+        lsp-headerline-breadcrumb-enable t))
+
+;; Integração company (auto-complete)
+(after! company
+  (setq company-idle-delay 0.05
+        company-minimum-prefix-length 1
+        company-tooltip-align-annotations t))
+
+;; ---------- GIT ----------
+(after! magit
+  (setq magit-display-buffer-function #'magit-display-buffer-fullframe-status-v1))
+
+;; ======================================================================
+;;                           LÍNGUAS
+;; ======================================================================
+
+;; ---- Go ----------------------------------------------------------------
+(after! go-mode
+  (setq gofmt-command "goimports")
+  (add-hook 'before-save-hook #'gofmt-before-save)
+  (add-hook 'go-mode-hook #'lsp-deferred)
+  (add-hook 'go-mode-hook #'tree-sitter!))
+
+;; Atalhos locais (SPC m …)
+(after! go-mode
+  (map! :map go-mode-map
+        :localleader
+        "r"  #'recompile
+        "b"  (cmd! (compile "go build ./..."))
+        "t"  (cmd! (compile "go test ./..."))
+        "f"  #'gofmt
+        "m"  (cmd! (compile "go mod tidy"))))
+
+;; ---- Rust --------------------------------------------------------------
+(after! rustic
+  (setq rustic-lsp-server 'rust-analyzer
+        rustic-format-on-save t)
+  (add-hook 'rustic-mode-hook #'lsp-deferred)
+  (add-hook 'rustic-mode-hook #'tree-sitter!))
+
+(after! rustic
+  (map! :map rustic-mode-map
+        :localleader
+        "b" #'rustic-cargo-build
+        "r" #'rustic-cargo-run
+        "t" #'rustic-cargo-test
+        "f" #'rustic-format-buffer))
+
+;; ---- C / C++ -----------------------------------------------------------
+(after! c++-mode
+  (add-hook 'c++-mode-hook #'lsp-deferred)
+  (add-hook 'c++-mode-hook #'tree-sitter!))
+(after! c-mode
+  (add-hook 'c-mode-hook #'lsp-deferred)
+  (add-hook 'c-mode-hook #'tree-sitter!))
+
+;; clang-format on save (opcional)
+(defun my-c-c++-format-buffer ()
+  (when (or (derived-mode-p 'c-mode) (derived-mode-p 'c++-mode))
+    (when (executable-find "clang-format")
+      (call-interactively 'clang-format-buffer))))
+(add-hook 'before-save-hook #'my-c-c++-format-buffer)
+
+(after! cc-mode
+  (map! :map (c-mode-map c++-mode-map)
+        :localleader
+        "b" (cmd! (compile "make -k"))
+        "r" #'recompile
+        "f" #'clang-format-buffer))
+
+;; ---- Clojure -----------------------------------------------------------
+;; LSP + CIDER
+;; Requer clojure-lsp e clj-kondo instalados; para REPL, Lein/CLI/Boot conforme projeto
+(after! clojure-mode
+  (add-hook 'clojure-mode-hook #'lsp-deferred)
+  (add-hook 'clojure-mode-hook #'tree-sitter!))
+
+(after! cider
+  (setq cider-repl-display-help-banner nil
+        cider-show-error-buffer t
+        cider-auto-select-error-buffer t))
+
+(after! clojure-mode
+  (map! :map clojure-mode-map
+        :localleader
+        "'"  #'cider-jack-in
+        "b"  #'cider-load-buffer
+        "e"  #'cider-eval-defun-at-point
+        "r"  #'cider-refresh
+        "t"  #'cider-test-run-ns-tests))
+
+;; ---- Elixir ------------------------------------------------------------
+;; Requer ElixirLS (elixir-ls); mix format
+(after! elixir-mode
+  (add-hook 'elixir-mode-hook #'lsp-deferred)
+  (add-hook 'elixir-mode-hook #'tree-sitter!)
+  (defun my-elixir-format-on-save ()
+    (add-hook 'before-save-hook #'elixir-format nil t))
+  (add-hook 'elixir-mode-hook #'my-elixir-format-on-save))
+
+(after! elixir-mode
+  (map! :map elixir-mode-map
+        :localleader
+        "b" (cmd! (compile "mix compile"))
+        "t" (cmd! (compile "mix test"))
+        "f" #'elixir-format))
+
+;; ======================================================================
+;;                     Atalhos gerais (Leader)
+;; ======================================================================
+(map! :leader
+      :desc "Abrir arquivo"        "f f" #'find-file
+      :desc "Projetos"             "p p" #'projectile-switch-project
+      :desc "Arquivos do projeto"  "p f" #'projectile-find-file
+      :desc "Buscar no projeto"    "/"   #'+default/search-project
+      :desc "Terminal vterm"       "o t" #'+vterm/here
+      :desc "Treemacs toggle"      "o e" #'+treemacs/toggle
+      :desc "Magit status"         "g g" #'magit-status
+      :desc "Formatar buffer"      "="   #'+format/buffer
+      :desc "Renomear simb. (LSP)" "c r" #'lsp-rename)
+
 
 ;; There are two ways to load a theme. Both assume the theme is installed and
 ;; available. You can either set `doom-theme' or manually load a theme with the
@@ -43,20 +166,6 @@
 (setq org-directory "~/org/")
 
 
-;; Whenever you reconfigure a package, make sure to wrap your config in an
-;; `after!' block, otherwise Doom's defaults may override your settings. E.g.
-;;
-;;   (after! PACKAGE
-;;     (setq x y))
-;;
-;; The exceptions to this rule:
-;;
-;;   - Setting file/directory variables (like `org-directory')
-;;   - Setting variables which explicitly tell you to set them before their
-;;     package is loaded (see 'C-h v VARIABLE' to look up their documentation).
-;;   - Setting doom variables (which start with 'doom-' or '+').
-;;
-;; Here are some additional functions/macros that will help you configure Doom.
 ;;
 ;; - `load!' for loading external *.el files relative to this one
 ;; - `use-package!' for configuring packages
